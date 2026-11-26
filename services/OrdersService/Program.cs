@@ -1,6 +1,17 @@
+using System.Text.Json.Serialization;
+using FluentValidation;
+using Microsoft.EntityFrameworkCore;
+using OrdersService.Clients;
+using OrdersService.Data;
+using OrdersService.Models;
+using OrdersService.Services;
+using OrdersService.Validators;
+
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -12,6 +23,18 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException("Connection string 'DefaultConnection' is not configured.");
+
+builder.Services.AddDbContext<OrdersDbContext>(options =>
+    options.UseSqlite(connectionString));
+
+builder.Services.AddScoped<IValidator<PlaceOrderRequest>, PlaceOrderRequestValidator>();
+
+builder.Services.AddSingleton<IInventoryClient, StubInventoryClient>();
+
+builder.Services.AddScoped<IOrderService, OrderService>();
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
@@ -22,6 +45,10 @@ if (app.Environment.IsDevelopment())
         options.SwaggerEndpoint("/swagger/v1/swagger.json", "OrdersService v1");
         options.RoutePrefix = "swagger";
     });
+
+    // Apply migrations on startup in Development so a fresh clone runs with no manual step.
+    using var scope = app.Services.CreateScope();
+    scope.ServiceProvider.GetRequiredService<OrdersDbContext>().Database.Migrate();
 }
 
 app.MapControllers();
