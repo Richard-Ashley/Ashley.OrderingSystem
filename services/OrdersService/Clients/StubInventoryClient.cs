@@ -1,3 +1,7 @@
+// This stub is no longer registered in DI as of Wave C, but kept for reference
+// and for use in future tests that want to isolate OrdersService from
+// InventoryService availability.
+
 using Contracts.Inventory;
 
 namespace OrdersService.Clients;

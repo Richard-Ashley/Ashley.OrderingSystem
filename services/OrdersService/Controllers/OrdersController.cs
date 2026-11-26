@@ -25,6 +25,7 @@ public sealed class OrdersController : ControllerBase
     [ProducesResponseType(typeof(PlaceOrderResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status503ServiceUnavailable)]
     public async Task<ActionResult<PlaceOrderResponse>> Place(
         [FromBody] PlaceOrderRequest request,
         CancellationToken cancellationToken)
@@ -43,11 +44,13 @@ public sealed class OrdersController : ControllerBase
 
         if (!result.Success)
         {
-            return Conflict(new ProblemDetails
+            return StatusCode(result.StatusCode, new ProblemDetails
             {
-                Title = "Order could not be placed",
+                Title = result.StatusCode == StatusCodes.Status503ServiceUnavailable
+                    ? "Inventory service unavailable"
+                    : "Order could not be placed",
                 Detail = result.Reason,
-                Status = StatusCodes.Status409Conflict
+                Status = result.StatusCode
             });
         }
 

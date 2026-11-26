@@ -31,7 +31,15 @@ builder.Services.AddDbContext<OrdersDbContext>(options =>
 
 builder.Services.AddScoped<IValidator<PlaceOrderRequest>, PlaceOrderRequestValidator>();
 
-builder.Services.AddSingleton<IInventoryClient, StubInventoryClient>();
+builder.Services.AddHttpClient<IInventoryClient, HttpInventoryClient>(client =>
+{
+    var baseUrl = builder.Configuration["Inventory:BaseUrl"]
+        ?? throw new InvalidOperationException("Inventory:BaseUrl is not configured.");
+    var timeoutSeconds = builder.Configuration.GetValue("Inventory:HttpTimeoutSeconds", 2);
+
+    client.BaseAddress = new Uri(baseUrl);
+    client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
+});
 
 builder.Services.AddScoped<IOrderService, OrderService>();
 

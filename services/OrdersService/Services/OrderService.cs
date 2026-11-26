@@ -20,9 +20,22 @@ public sealed class OrderService : IOrderService
 
     public async Task<PlaceOrderResult> PlaceOrder(PlaceOrderRequest request, CancellationToken cancellationToken)
     {
-        var stockCheck = await _inventory.CheckStock(
-            new StockCheckRequest(request.ProductId, request.Quantity),
-            cancellationToken);
+        StockCheckResponse stockCheck;
+        try
+        {
+            stockCheck = await _inventory.CheckStock(
+                new StockCheckRequest(request.ProductId, request.Quantity),
+                cancellationToken);
+        }
+        catch (InventoryUnavailableException ex)
+        {
+            _logger.LogError(ex, "Could not reach InventoryService for order attempt (product {ProductId})", request.ProductId);
+            return new PlaceOrderResult(
+                Success: false,
+                OrderId: null,
+                Reason: "Inventory service is unavailable. Please try again later.",
+                StatusCode: 503);
+        }
 
         if (!stockCheck.InStock || stockCheck.AvailableQuantity < request.Quantity)
         {

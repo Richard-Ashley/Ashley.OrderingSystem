@@ -1,6 +1,19 @@
+using System.Text.Json.Serialization;
+using Contracts.Inventory;
+using FluentValidation;
+using InventoryService.Data;
+using InventoryService.Services;
+using InventoryService.Validators;
+using Microsoft.EntityFrameworkCore;
+
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -12,10 +25,23 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException("Connection string 'DefaultConnection' is not configured.");
+
+builder.Services.AddDbContext<InventoryDbContext>(options =>
+    options.UseSqlite(connectionString));
+
+builder.Services.AddScoped<IValidator<StockCheckRequest>, StockCheckRequestValidator>();
+builder.Services.AddScoped<IInventoryService, InventoryBusinessService>();
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<InventoryDbContext>();
+    db.Database.Migrate();
+
     app.UseSwagger();
     app.UseSwaggerUI(options =>
     {

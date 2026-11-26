@@ -7,4 +7,4 @@ public interface IOrderService
     Task<PlaceOrderResult> PlaceOrder(PlaceOrderRequest request, CancellationToken cancellationToken);
 }
 
-public sealed record PlaceOrderResult(bool Success, Guid? OrderId, string? Reason);
+public sealed record PlaceOrderResult(bool Success, Guid? OrderId, string? Reason, int StatusCode = 409);
