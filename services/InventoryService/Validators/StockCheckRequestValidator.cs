@@ -7,7 +7,10 @@ public sealed class StockCheckRequestValidator : AbstractValidator<StockCheckReq
 {
     public StockCheckRequestValidator()
     {
-        RuleFor(x => x.ProductId).GreaterThan(0);
-        RuleFor(x => x.Quantity).GreaterThan(0);
+        RuleFor(x => x.ProductId)
+            .GreaterThan(0).WithMessage("Product id must be positive.");
+
+        RuleFor(x => x.Quantity)
+            .GreaterThan(0).WithMessage("Quantity must be positive.");
     }
 }

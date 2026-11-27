@@ -17,6 +17,20 @@ namespace InventoryService.Data.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.15");
 
+            modelBuilder.Entity("InventoryService.Models.ProcessedMessage", b =>
+                {
+                    b.Property<Guid>("MessageId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("ProcessedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("MessageId");
+
+                    b.ToTable("ProcessedMessages");
+                });
+
             modelBuilder.Entity("InventoryService.Models.Product", b =>
                 {
                     b.Property<int>("Id")

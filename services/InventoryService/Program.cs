@@ -1,6 +1,8 @@
 using System.Text.Json.Serialization;
 using Contracts.Inventory;
 using FluentValidation;
+using MassTransit;
+using InventoryService.Consumers;
 using InventoryService.Data;
 using InventoryService.Services;
 using InventoryService.Validators;
@@ -33,6 +35,28 @@ builder.Services.AddDbContext<InventoryDbContext>(options =>
 
 builder.Services.AddScoped<IValidator<StockCheckRequest>, StockCheckRequestValidator>();
 builder.Services.AddScoped<IInventoryService, InventoryBusinessService>();
+
+builder.Services.AddMassTransit(x =>
+{
+    x.AddConsumer<OrderPlacedConsumer>();
+
+    x.UsingRabbitMq((context, cfg) =>
+    {
+        var rabbit = builder.Configuration.GetSection("RabbitMq");
+        cfg.Host(
+            rabbit["Host"] ?? "localhost",
+            rabbit.GetValue<ushort>("Port", 5672),
+            "/",
+            h =>
+            {
+                h.Username(rabbit["User"] ?? "guest");
+                h.Password(rabbit["Password"] ?? "guest");
+            });
+
+        cfg.UseMessageRetry(r => r.Interval(3, TimeSpan.FromSeconds(1)));
+        cfg.ConfigureEndpoints(context);
+    });
+});
 
 var app = builder.Build();
 

@@ -8,6 +8,7 @@ public sealed class InventoryDbContext : DbContext
     public InventoryDbContext(DbContextOptions<InventoryDbContext> options) : base(options) { }
 
     public DbSet<Product> Products => Set<Product>();
+    public DbSet<ProcessedMessage> ProcessedMessages => Set<ProcessedMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -22,6 +23,12 @@ public sealed class InventoryDbContext : DbContext
             entity.Property(p => p.StockQuantity).IsRequired();
 
             entity.Property(p => p.UpdatedAt).IsRequired();
+        });
+
+        modelBuilder.Entity<ProcessedMessage>(entity =>
+        {
+            entity.HasKey(m => m.MessageId);
+            entity.Property(m => m.ProcessedAt).IsRequired();
         });
 
         var seedTimestamp = new DateTimeOffset(2026, 11, 26, 0, 0, 0, TimeSpan.Zero);
