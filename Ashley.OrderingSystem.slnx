@@ -8,4 +8,7 @@
     <Project Path="shared/Contracts/Contracts.csproj" />
     <Project Path="shared/Observability/Observability.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/OrderingSystem.Tests/OrderingSystem.Tests.csproj" />
+  </Folder>
 </Solution>
