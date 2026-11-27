@@ -1,0 +1,164 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-test-smoke:
+    name: Build, test and smoke-test
+    runs-on: ubuntu-latest
+
+    services:
+      rabbitmq:
+        image: rabbitmq:3.13-management-alpine
+        ports:
+          - 5672:5672
+        env:
+          RABBITMQ_DEFAULT_USER: ordering
+          RABBITMQ_DEFAULT_PASS: ordering_dev_pass
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+      seq:
+        image: datalust/seq:latest
+        ports:
+          - 5341:5341
+          - 8081:80
+        env:
+          ACCEPT_EULA: "Y"
+          SEQ_FIRSTRUN_NOAUTHENTICATION: "true"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Run unit tests
+        run: >-
+          dotnet test --no-build --configuration Release
+          --collect:"XPlat Code Coverage" --results-directory ./coverage
+
+      - name: Wait for Seq
+        run: |
+          for i in {1..30}; do
+            if curl -sf http://localhost:8081/api > /dev/null; then
+              echo "Seq is up after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Seq did not start in 30s"
+          exit 1
+
+      - name: Start services
+        env:
+          ASPNETCORE_ENVIRONMENT: Development
+        run: |
+          mkdir -p logs
+          # Inventory and Notification first so their queues exist before Orders publishes.
+          ASPNETCORE_URLS=http://localhost:5102 dotnet run --no-build --configuration Release --no-launch-profile \
+            --project services/InventoryService/InventoryService.csproj > logs/inventory.log 2>&1 &
+          ASPNETCORE_URLS=http://localhost:5103 dotnet run --no-build --configuration Release --no-launch-profile \
+            --project services/NotificationService/NotificationService.csproj > logs/notification.log 2>&1 &
+
+          wait_for() {
+            for i in {1..60}; do
+              if curl -sf "http://localhost:$1/swagger/v1/swagger.json" > /dev/null; then
+                echo "$2 is up on :$1 after ${i}s"
+                return 0
+              fi
+              sleep 1
+            done
+            echo "$2 did not start in 60s"
+            tail -n 40 "logs/$3.log"
+            return 1
+          }
+          wait_for 5102 InventoryService inventory
+          wait_for 5103 NotificationService notification
+
+          ASPNETCORE_URLS=http://localhost:5101 dotnet run --no-build --configuration Release --no-launch-profile \
+            --project services/OrdersService/OrdersService.csproj > logs/orders.log 2>&1 &
+          wait_for 5101 OrdersService orders
+
+      - name: Smoke test - place an order and verify the stock decrement
+        run: |
+          CID=aaaaaaaa-1111-2222-3333-bbbbbbbbbbbb
+
+          BEFORE=$(curl -sf http://localhost:5102/api/inventory/1 | jq -r .stockQuantity)
+          echo "Stock of product 1 before: $BEFORE"
+
+          STATUS=$(curl -s -o response.json -D headers.txt -w "%{http_code}" \
+            -X POST http://localhost:5101/api/orders \
+            -H "Content-Type: application/json" -H "X-Correlation-Id: $CID" \
+            -d '{"productId": 1, "quantity": 2, "customerEmail": "ci@example.com"}')
+          echo "POST /api/orders -> $STATUS"
+          cat response.json; echo
+          if [ "$STATUS" != "201" ]; then
+            echo "Expected 201"
+            exit 1
+          fi
+
+          if ! grep -qi "^x-correlation-id: $CID" headers.txt; then
+            echo "Correlation id was not echoed on the response"
+            cat headers.txt
+            exit 1
+          fi
+
+          # The decrement is asynchronous (OrderPlaced event via RabbitMQ), so poll.
+          EXPECTED=$((BEFORE - 2))
+          for i in {1..30}; do
+            AFTER=$(curl -sf http://localhost:5102/api/inventory/1 | jq -r .stockQuantity)
+            if [ "$AFTER" = "$EXPECTED" ]; then
+              echo "Stock decremented to $AFTER after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Stock did not reach $EXPECTED (last seen: $AFTER)"
+          exit 1
+
+      - name: Verify services reached Seq
+        run: |
+          sleep 3
+          COUNT=$(curl -sf "http://localhost:8081/api/events?count=5" | jq 'length')
+          echo "Events visible in Seq: $COUNT"
+          if [ "$COUNT" -lt 1 ]; then
+            echo "No events reached Seq"
+            exit 1
+          fi
+
+      - name: Stop services
+        if: always()
+        run: pkill -f "dotnet.*(InventoryService|NotificationService|OrdersService)" || true
+
+      - name: Upload service logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: service-logs
+          path: logs/
+          retention-days: 7
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 7
