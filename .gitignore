@@ -490,3 +490,6 @@ $RECYCLE.BIN/
 .env
 .env.local
 *.env
+
+# Service logs and pids written by scripts/start-all
+logs/
