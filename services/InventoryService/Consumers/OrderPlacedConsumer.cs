@@ -73,8 +73,12 @@ public sealed class OrderPlacedConsumer : IConsumer<OrderPlacedEvent>
         var threshold = _configuration.GetValue("Inventory:LowStockThreshold", 10);
         if (product.StockQuantity <= threshold)
         {
-            await context.Publish(new StockLowEvent(
-                product.Id, product.Name, product.StockQuantity, threshold, DateTimeOffset.UtcNow));
+            // Carry the incoming correlation id forward so the whole flow shares one id.
+            var correlationId = context.CorrelationId;
+            await context.Publish(
+                new StockLowEvent(
+                    product.Id, product.Name, product.StockQuantity, threshold, DateTimeOffset.UtcNow),
+                publishContext => publishContext.CorrelationId = correlationId);
         }
     }
 }

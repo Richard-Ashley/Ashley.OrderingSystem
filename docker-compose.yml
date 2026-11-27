@@ -14,3 +14,19 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+
+  seq:
+    image: datalust/seq:latest
+    container_name: ordering-seq
+    ports:
+      - "5341:5341"   # log ingestion
+      - "8081:80"     # web UI
+    environment:
+      ACCEPT_EULA: "Y"
+      SEQ_FIRSTRUN_NOAUTHENTICATION: "true"
+    volumes:
+      - seq-data:/data
+    restart: unless-stopped
+
+volumes:
+  seq-data:

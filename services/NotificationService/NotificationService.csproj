@@ -7,11 +7,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="MassTransit.RabbitMQ" Version="8.5.*" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.*" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\shared\Contracts\Contracts.csproj" />
+    <ProjectReference Include="..\..\shared\Observability\Observability.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,6 +1,7 @@
 using Contracts.Events;
 using Contracts.Inventory;
 using MassTransit;
+using Observability;
 using OrdersService.Clients;
 using OrdersService.Data;
 using OrdersService.Models;
@@ -12,6 +13,7 @@ public sealed class OrderService : IOrderService
     private readonly OrdersDbContext _db;
     private readonly IInventoryClient _inventory;
     private readonly IPublishEndpoint _publisher;
+    private readonly ICorrelationIdAccessor _correlation;
     private readonly ILogger<OrderService> _logger;
     private readonly TimeSpan _publishTimeout;
 
@@ -19,12 +21,14 @@ public sealed class OrderService : IOrderService
         OrdersDbContext db,
         IInventoryClient inventory,
         IPublishEndpoint publisher,
+        ICorrelationIdAccessor correlation,
         IConfiguration configuration,
         ILogger<OrderService> logger)
     {
         _db = db;
         _inventory = inventory;
         _publisher = publisher;
+        _correlation = correlation;
         _logger = logger;
         _publishTimeout = TimeSpan.FromSeconds(configuration.GetValue("RabbitMq:PublishTimeoutSeconds", 5));
     }
@@ -80,12 +84,14 @@ public sealed class OrderService : IOrderService
         // The production fix is a transactional outbox (MassTransit.EntityFrameworkCore).
         // The publish is time-boxed: with the broker unreachable MassTransit would otherwise
         // wait for a very long time and hold the HTTP request open.
+        var correlationId = _correlation.Current;
         using var publishCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         publishCts.CancelAfter(_publishTimeout);
         try
         {
             await _publisher.Publish(
                 new OrderPlacedEvent(order.Id, order.ProductId, order.Quantity, order.CustomerEmail, order.CreatedAt),
+                context => context.CorrelationId = correlationId,
                 publishCts.Token);
         }
         catch (Exception ex)

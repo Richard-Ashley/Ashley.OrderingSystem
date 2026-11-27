@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using Contracts.Inventory;
 using FluentValidation;
 using MassTransit;
+using Observability;
 using InventoryService.Consumers;
 using InventoryService.Data;
 using InventoryService.Services;
@@ -9,6 +10,7 @@ using InventoryService.Validators;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.AddObservability("InventoryService");
 
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
@@ -54,7 +56,7 @@ builder.Services.AddMassTransit(x =>
             });
 
         cfg.UseMessageRetry(r => r.Interval(3, TimeSpan.FromSeconds(1)));
-        cfg.ConfigureEndpoints(context);
+        cfg.UseObservability(context, "inventory");
     });
 });
 
@@ -74,6 +76,7 @@ if (app.Environment.IsDevelopment())
     });
 }
 
+app.UseObservability();
 app.MapControllers();
 
 app.Run();

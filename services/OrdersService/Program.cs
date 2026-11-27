@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using MassTransit;
+using Observability;
 using OrdersService.Clients;
 using OrdersService.Consumers;
 using OrdersService.Data;
@@ -10,6 +11,7 @@ using OrdersService.Services;
 using OrdersService.Validators;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.AddObservability("OrdersService");
 
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
@@ -41,7 +43,7 @@ builder.Services.AddHttpClient<IInventoryClient, HttpInventoryClient>(client =>
 
     client.BaseAddress = new Uri(baseUrl);
     client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
-});
+}).AddHttpMessageHandler<CorrelationIdHandler>();
 
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddMassTransit(x =>
@@ -62,7 +64,7 @@ builder.Services.AddMassTransit(x =>
             });
 
         cfg.UseMessageRetry(r => r.Interval(3, TimeSpan.FromSeconds(1)));
-        cfg.ConfigureEndpoints(context);
+        cfg.UseObservability(context, "orders");
     });
 });
 
@@ -83,6 +85,7 @@ if (app.Environment.IsDevelopment())
     scope.ServiceProvider.GetRequiredService<OrdersDbContext>().Database.Migrate();
 }
 
+app.UseObservability();
 app.MapControllers();
 
 app.Run();
